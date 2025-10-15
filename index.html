@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Data</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        #search-container {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #search-input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 200px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th, td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background-color: #f2f2f2;
+            cursor: pointer;
+        }
+
+        th:hover {
+            background-color: #ddd;
+        }
+
+        tr:hover {
+            background-color: #f5f5f5;
+        }
+
+        .sortable {
+            position: relative;
+            padding-right: 20px;
+        }
+
+        .sortable::after {
+            content: "\\2195"; /* Up-down arrow */
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+        }
+
+        #error-message {
+            color: red;
+            margin-top: 10px;
+        }
+
+        #csv-file-input {
+            margin-bottom: 10px;
+        }
+
+        #loading-message {
+            text-align: center;
+            margin-top: 20px;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            table {
+                display: block;
+                overflow-x: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Employee Data</h1>
+
+        <input type="file" id="csv-file-input" accept=".csv">
+
+        <div id="search-container">
+            <input type="text" id="search-input" placeholder="Search...">
+        </div>
+
+        <div id="loading-message" style="display:none;">Loading data...</div>
+        <div id="error-message"></div>
+
+        <table id="employee-table">
+            <thead>
+                <tr></tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <script>
+        const csvFileInput = document.getElementById('csv-file-input');
+        const searchInput = document.getElementById('search-input');
+        const employeeTable = document.getElementById('employee-table');
+        const tableHead = employeeTable.querySelector('thead tr');
+        const tableBody = employeeTable.querySelector('tbody');
+        const errorMessage = document.getElementById('error-message');
+        const loadingMessage = document.getElementById('loading-message');
+
+        let employeeData = [];
+        let headers = [];
+
+        csvFileInput.addEventListener('change', handleFileSelect);
+        searchInput.addEventListener('input', handleSearch);
+
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+
+            if (file) {
+                const reader = new FileReader();
+
+                reader.onload = function(event) {
+                    const csvText = event.target.result;
+                    parseCSV(csvText);
+                };
+
+                reader.onerror = function() {
+                    errorMessage.textContent = 'Error reading the CSV file.';
+                    loadingMessage.style.display = 'none';
+                };
+
+                loadingMessage.style.display = 'block';
+                errorMessage.textContent = '';
+                reader.readAsText(file);
+            }
+        }
+
+        function parseCSV(csvText) {
+            try {
+                const lines = csvText.trim().split('\n');
+                headers = lines[0].split(',').map(header => header.trim());
+                employeeData = [];
+
+                for (let i = 1; i < lines.length; i++) {
+                    const values = lines[i].split(',').map(value => value.trim());
+                    if (values.length === headers.length) {
+                        const employee = {};
+                        for (let j = 0; j < headers.length; j++) {
+                            employee[headers[j]] = values[j];
+                        }
+                        employeeData.push(employee);
+                    } else {
+                        console.warn(`Skipping line ${i + 1} due to inconsistent number of columns.`);
+                    }
+                }
+
+                renderTable(employeeData);
+            } catch (error) {
+                errorMessage.textContent = 'Error parsing CSV data. Please check the file format.';
+                console.error(error);
+            } finally {
+                loadingMessage.style.display = 'none';
+            }
+        }
+
+        function renderTable(data) {
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                th.classList.add('sortable');
+                th.addEventListener('click', () => sortTable(header));
+                tableHead.appendChild(th);
+            });
+
+            data.forEach(employee => {
+                const row = document.createElement('tr');
+                headers.forEach(header => {
+                    const cell = document.createElement('td');
+                    cell.textContent = employee[header];
+                    row.appendChild(cell);
+                });
+                tableBody.appendChild(row);
+            });
+        }
+
+        function sortTable(column) {
+            const isAscending = tableHead.querySelector(`th:nth-child(${headers.indexOf(column) + 1})`).getAttribute('data-order') !== 'asc';
+
+            employeeData.sort((a, b) => {
+                const valueA = a[column];
+                const valueB = b[column];
+
+                if (valueA < valueB) {
+                    return isAscending ? -1 : 1;
+                }
+                if (valueA > valueB) {
+                    return isAscending ? 1 : -1;
+                }
+                return 0;
+            });
+
+            renderTable(employeeData);
+
+            // Update data-order attributes
+            headers.forEach((header, index) => {
+                const th = tableHead.querySelector(`th:nth-child(${index + 1})`);
+                if (header === column) {
+                    th.setAttribute('data-order', isAscending ? 'asc' : 'desc');
+                } else {
+                    th.removeAttribute('data-order');
+                }
+            });
+        }
+
+        function handleSearch() {
+            const searchTerm = searchInput.value.toLowerCase();
+            const filteredData = employeeData.filter(employee => {
+                for (const key in employee) {
+                    if (employee.hasOwnProperty(key) && employee[key].toLowerCase().includes(searchTerm)) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            renderTable(filteredData);
+        }
+    </script>
+</body>
+</html>
